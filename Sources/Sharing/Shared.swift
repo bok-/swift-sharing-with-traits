@@ -1,8 +1,16 @@
+#if canImport(CustomDump)
 import CustomDump
+#endif
+#if canImport(Dependencies)
 import Dependencies
+#endif
 import Foundation
+#if canImport(IdentifiedCollections)
 import IdentifiedCollections
+#endif
+#if canImport(PerceptionCore)
 import PerceptionCore
+#endif
 
 #if canImport(Combine)
   import Combine
@@ -15,6 +23,9 @@ import PerceptionCore
 /// systems.
 @dynamicMemberLookup
 @propertyWrapper
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 public struct Shared<Value> {
   let box: Box
   #if canImport(SwiftUI)
@@ -97,7 +108,11 @@ public struct Shared<Value> {
   #if compiler(>=6)
     public var wrappedValue: Value {
       get {
+        #if canImport(Dependencies)
         @Dependency(\.snapshots) var snapshots
+        #else
+        let snapshots = Snapshots()
+        #endif
         if snapshots.isAsserting {
           return reference.snapshot ?? reference.wrappedValue
         } else {
@@ -115,7 +130,11 @@ public struct Shared<Value> {
     }
   #else
     public var wrappedValue: Value {
-      @Dependency(\.snapshots) var snapshots
+#if canImport(Dependencies)
+@Dependency(\.snapshots) var snapshots
+#else
+let snapshots = Snapshots()
+#endif
       if snapshots.isAsserting {
         return reference.snapshot ?? reference.wrappedValue
       } else {
@@ -143,7 +162,11 @@ public struct Shared<Value> {
     column: UInt = #column
   ) rethrows -> R {
     try reference.withLock { value in
-      @Dependency(\.snapshots) var snapshots
+#if canImport(Dependencies)
+@Dependency(\.snapshots) var snapshots
+#else
+let snapshots = Snapshots()
+#endif
       if snapshots.isAsserting {
         var snapshot = reference.snapshot ?? reference.wrappedValue
         defer {
@@ -227,6 +250,9 @@ public struct Shared<Value> {
   /// Returns a read-only shared reference to the resulting value of a given closure.
   ///
   /// - Returns: A new read-only shared reference.
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
   public func read<Member>(
     _ body: @escaping @Sendable (Value) -> Member
   ) -> SharedReader<Member> {
@@ -238,6 +264,9 @@ public struct Shared<Value> {
     deprecated,
     message: "Use dynamic member lookup instead ('$shared.member', not '$shared.read(\\.member)')"
   )
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
   public func read<Member>(_ keyPath: KeyPath<Value, Member>) -> SharedReader<Member> {
     self[dynamicMember: keyPath]
   }
@@ -412,18 +441,27 @@ public struct Shared<Value> {
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension Shared: CustomReflectable {
   public var customMirror: Mirror {
     Mirror(reflecting: wrappedValue)
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension Shared: CustomStringConvertible {
   public var description: String {
     "\(typeName(Self.self, genericsAbbreviated: false))(\(reference.description))"
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension Shared: Equatable where Value: Equatable {
   public static func == (lhs: Self, rhs: Self) -> Bool {
     // TODO: Explore 'isTesting ? (check snapshot against value) : lhs.reference == rhs.reference
@@ -435,7 +473,11 @@ extension Shared: Equatable where Value: Equatable {
         }
         return openRhs(rhs.reference)
       }
-      @Dependency(\.snapshots) var snapshots
+#if canImport(Dependencies)
+@Dependency(\.snapshots) var snapshots
+#else
+let snapshots = Snapshots()
+#endif
       if snapshots.isAsserting, openLhs(lhs.reference) {
         snapshots.untrack(lhs.reference)
         return lhs.wrappedValue == rhs.reference.wrappedValue
@@ -443,7 +485,7 @@ extension Shared: Equatable where Value: Equatable {
         return lhs.wrappedValue == rhs.wrappedValue
       }
     }
-    #if DEBUG
+    #if DEBUG && canImport(PerceptionCore)
       return _PerceptionLocals.$skipPerceptionChecking.withValue(true, operation: isEqual)
     #else
       return isEqual()
@@ -451,9 +493,12 @@ extension Shared: Equatable where Value: Equatable {
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension Shared: Identifiable where Value: Identifiable {
   public var id: Value.ID {
-    #if DEBUG
+    #if DEBUG && canImport(PerceptionCore)
       _PerceptionLocals.$skipPerceptionChecking.withValue(true) { wrappedValue.id }
     #else
       wrappedValue.id
@@ -461,16 +506,28 @@ extension Shared: Identifiable where Value: Identifiable {
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension Shared: Observable {}
 
 #if compiler(>=6)
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
   extension Shared: Sendable {}
 #else
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
   extension Shared: @unchecked Sendable {}
 #endif
 
+#if canImport(PerceptionCore)
 extension Shared: Perceptible {}
+#endif
 
+#if canImport(CustomDump)
 extension Shared: CustomDumpRepresentable {
   public var customDumpValue: Any {
     wrappedValue
@@ -489,8 +546,12 @@ extension Shared: _CustomDiffObject {
     return open(reference)
   }
 }
+#endif
 
 #if canImport(SwiftUI)
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
   extension Shared: DynamicProperty {
     public func update() {
       box.subscribe(state: _generation)

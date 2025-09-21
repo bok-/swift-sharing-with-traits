@@ -1,8 +1,15 @@
+#if canImport(Dependencies)
 import Dependencies
+#endif
 import Foundation
+#if canImport(PerceptionCore)
 import PerceptionCore
+#endif
 
-final class PersistentReferences: @unchecked Sendable, DependencyKey {
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
+final class PersistentReferences: @unchecked Sendable {
   static var liveValue: PersistentReferences { PersistentReferences() }
   static var testValue: PersistentReferences { PersistentReferences() }
 
@@ -47,3 +54,10 @@ final class PersistentReferences: @unchecked Sendable, DependencyKey {
     }
   }
 }
+
+#if canImport(Dependencies)
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
+extension PersistentReferences: DependencyKey {}
+#endif

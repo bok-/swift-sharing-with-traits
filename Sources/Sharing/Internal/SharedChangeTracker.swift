@@ -1,8 +1,15 @@
+#if canImport(Dependencies)
 import Dependencies
+#endif
 import Foundation
+#if canImport(IssueReporting)
 import IssueReporting
+#endif
 
 @_spi(SharedChangeTracking)
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 public struct SharedChangeTracker: Hashable, Sendable {
   fileprivate final class Changes: @unchecked Sendable {
     private let lock = NSRecursiveLock()
@@ -113,10 +120,17 @@ public struct SharedChangeTracker: Hashable, Sendable {
 
   public var hasChanges: Bool { changes.hasChanges }
 
+  #if canImport(IssueReporting)
   public init(reportUnassertedChanges: Bool = isTesting) {
     self.changes = Changes(reportUnassertedChanges: reportUnassertedChanges)
   }
+  #else
+  public init(reportUnassertedChanges: Bool = false) {
+    self.changes = Changes(reportUnassertedChanges: reportUnassertedChanges)
+  }
+  #endif
 
+  #if canImport(Dependencies)
   public func track(_ dependencies: inout DependencyValues) {
     dependencies[SharedChangeTrackersKey.self].insert(self)
   }
@@ -136,6 +150,21 @@ public struct SharedChangeTracker: Hashable, Sendable {
       try body()
     }
   }
+#else
+  public func track<R>(_ body: () throws -> R) rethrows -> R {
+    var trackers = SharedChangeTracker.trackers
+    trackers.insert(self)
+    return try SharedChangeTracker.$trackers.withValue(trackers) {
+      try body()
+    }
+  }
+
+  public func assert<R>(_ body: () throws -> R) rethrows -> R {
+    try SharedChangeTracker.$tracker.withValue(self) {
+      try body()
+    }
+  }
+#endif
 
   public func reset() {
     changes.reset()
@@ -150,6 +179,9 @@ public struct SharedChangeTracker: Hashable, Sendable {
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 private protocol AnyChange<Value> {
   associatedtype Value
   var key: any MutableReference { get }
@@ -161,13 +193,26 @@ private protocol AnyChange<Value> {
   var column: UInt { get }
 }
 
+#if canImport(Dependencies)
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension DependencyValues {
   var snapshots: Snapshots { Snapshots() }
 }
+#endif
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 struct Snapshots: Sendable {
+  #if canImport(Dependencies)
   @Dependency(SharedChangeTrackerKey.self) var sharedChangeTracker
   @Dependency(SharedChangeTrackersKey.self) var sharedChangeTrackers
+  #else
+  let sharedChangeTracker = SharedChangeTracker.tracker
+  let sharedChangeTrackers = SharedChangeTracker.trackers
+  #endif
 
   var isTracking: Bool {
     !sharedChangeTrackers.isEmpty
@@ -217,12 +262,28 @@ struct Snapshots: Sendable {
   }
 }
 
+#if canImport(Dependencies)
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 private enum SharedChangeTrackerKey: DependencyKey {
   static var liveValue: SharedChangeTracker? { nil }
   static var testValue: SharedChangeTracker? { nil }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 private enum SharedChangeTrackersKey: DependencyKey {
   static var liveValue: Set<SharedChangeTracker> { [] }
   static var testValue: Set<SharedChangeTracker> { [] }
 }
+#else
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
+private extension SharedChangeTracker {
+  @TaskLocal static var tracker: SharedChangeTracker?
+  @TaskLocal static var trackers = Set<SharedChangeTracker>()
+}
+#endif

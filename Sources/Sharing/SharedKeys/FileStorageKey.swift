@@ -1,7 +1,13 @@
 #if canImport(AppKit) || canImport(UIKit) || canImport(WatchKit)
-  import CombineSchedulers
+
+@preconcurrency import Combine
+#if canImport(CombineSchedulers)
+import CombineSchedulers
+#endif
   import ConcurrencyExtras
-  import Dependencies
+#if canImport(Dependencies)
+import Dependencies
+#endif
   @preconcurrency import Dispatch
 
   #if canImport(AppKit)
@@ -97,7 +103,11 @@
       decode: @escaping @Sendable (Data) throws -> Value,
       encode: @escaping @Sendable (Value) throws -> Data
     ) {
+      #if canImport(Dependencies)
       @Dependency(\.defaultFileStorage) var storage
+      #else
+      let storage = FileStorage.defaultFileStorage
+      #endif
       self.storage = storage
       self.url = url
       self.decode = decode
@@ -266,6 +276,7 @@
     fileprivate let storage: FileStorage
   }
 
+#if canImport(Dependencies)
   private enum FileStorageDependencyKey: DependencyKey {
     static var liveValue: FileStorage {
       .fileSystem
@@ -311,9 +322,13 @@
       set { self[FileStorageDependencyKey.self] = newValue }
     }
   }
+#endif
 
   /// A type that encapsulates saving and loading data from disk.
   public struct FileStorage: Hashable, Sendable {
+    #if !canImport(Dependencies)
+    @TaskLocal static var defaultFileStorage = FileStorage.fileSystem
+    #endif
     let id: AnyHashableSendable
     let async: @Sendable (DispatchWorkItem) -> Void
     let asyncAfter: @Sendable (DispatchTimeInterval, DispatchWorkItem) -> Void
@@ -381,6 +396,7 @@
       inMemory(fileSystem: LockIsolated([:]))
     }
 
+    #if canImport(CombineSchedulers)
     @_spi(Internals) public static func inMemory(
       fileSystem: LockIsolated<[URL: Data]>,
       scheduler: AnySchedulerOf<DispatchQueue> = .immediate
@@ -412,6 +428,52 @@
         }
       )
     }
+    #else
+    @_spi(Internals) public static func inMemory(
+      fileSystem: LockIsolated<[URL: Data]>,
+      scheduler: some Scheduler & Sendable = ImmediateScheduler.shared
+    ) -> Self {
+      return Self(
+        id: AnyHashableSendable(ObjectIdentifier(fileSystem)),
+        async: { scheduler.schedule($0.perform) },
+        asyncAfter: {
+          switch $0 {
+          case .seconds(let value):
+            scheduler.schedule(after: scheduler.now.advanced(by: .seconds(value)), $1.perform)
+          case .milliseconds(let value):
+            scheduler.schedule(after: scheduler.now.advanced(by: .milliseconds(value)), $1.perform)
+          case .microseconds(let value):
+            scheduler.schedule(after: scheduler.now.advanced(by: .microseconds(value)), $1.perform)
+          case .nanoseconds(let value):
+            scheduler.schedule(after: scheduler.now.advanced(by: .nanoseconds(value)), $1.perform)
+          case .never:
+            break
+          @unknown default:
+            break
+          }
+        },
+        attributesOfItemAtPath: { _ in [:] },
+        createDirectory: { _, _ in },
+        fileExists: { fileSystem.keys.contains($0) },
+        fileSystemSource: { url, event, handler in
+          guard event.contains(.write)
+          else { return SharedSubscription {} }
+          return SharedSubscription {}
+        },
+        load: {
+          guard let data = fileSystem[$0]
+          else {
+            throw LoadError()
+          }
+          return data
+        },
+        save: { data, url in
+          fileSystem.withValue { $0[url] = data }
+        }
+      )
+    }
+    private struct LoadError: Error {}
+#endif
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
       lhs.id == rhs.id

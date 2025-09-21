@@ -1,4 +1,6 @@
+#if canImport(Dependencies)
 import Dependencies
+#endif
 
 /// A type that can load and subscribe to state in an external system.
 ///
@@ -72,6 +74,9 @@ extension LoadContext: Equatable where Value: Equatable {}
 
 extension LoadContext: Hashable where Value: Hashable {}
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension SharedReader {
   /// Creates a shared reference to a read-only value using a shared key.
   ///
@@ -153,7 +158,11 @@ extension SharedReader {
   /// - Parameter key: A shared key associated with the shared reference. It is responsible for
   ///   loading the shared reference's value from some external source.
   public func load(_ key: some SharedReaderKey<Value>) async throws {
-    @Dependency(PersistentReferences.self) var persistentReferences
+#if canImport(Dependencies)
+@Dependency(PersistentReferences.self) var persistentReferences
+#else
+let persistentReferences = PersistentReferences.testValue
+#endif
     SharedPublisherLocals.$isLoading.withValue(true) {
       projectedValue = SharedReader(
         reference: persistentReferences.value(
@@ -219,7 +228,11 @@ extension SharedReader {
     rethrowing value: @autoclosure () throws -> Value, _ key: some SharedReaderKey<Value>,
     skipInitialLoad: Bool
   ) rethrows {
-    @Dependency(PersistentReferences.self) var persistentReferences
+#if canImport(Dependencies)
+@Dependency(PersistentReferences.self) var persistentReferences
+#else
+let persistentReferences = PersistentReferences.testValue
+#endif
     self.init(
       reference: try persistentReferences.value(
         forKey: key,

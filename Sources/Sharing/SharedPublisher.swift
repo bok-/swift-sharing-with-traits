@@ -1,6 +1,9 @@
 #if canImport(Combine)
   import Combine
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
   extension Shared {
     /// Returns a publisher that emits events when the underlying value changes.
     ///
@@ -21,6 +24,9 @@
     }
   }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
   extension SharedReader {
     /// Returns a publisher that emits events when the underlying value changes.
     ///

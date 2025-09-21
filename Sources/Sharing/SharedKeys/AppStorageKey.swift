@@ -1,5 +1,9 @@
 #if canImport(AppKit) || canImport(UIKit) || canImport(WatchKit)
-  import Dependencies
+
+import ConcurrencyExtras
+#if canImport(Dependencies)
+import Dependencies
+#endif
   @preconcurrency import Foundation
 
   #if canImport(AppKit)
@@ -296,6 +300,10 @@
     }
   }
 
+#if !canImport(Dependencies)
+@TaskLocal var appStorageKeyFormatWarningEnabled = true
+#endif
+
   /// A type defining a user defaults persistence strategy.
   public struct AppStorageKey<Value: Sendable>: SharedKey {
     private let lookup: any Lookup<Value>
@@ -307,7 +315,11 @@
     }
 
     private init(lookup: some Lookup<Value>, key: String, store: UserDefaults?) {
+      #if canImport(Dependencies)
       @Dependency(\.defaultAppStorage) var defaultStore
+      #else
+      let defaultStore = UserDefaults.standard
+      #endif
       self.lookup = lookup
       self.key = key
       let store = store ?? defaultStore
@@ -457,7 +469,12 @@
       let removeObserver: @Sendable () -> Void
       let keyContainsPeriod = key.contains(".")
       if keyContainsPeriod || key.hasPrefix("@") {
+        #if canImport(IssueReporting)
+        #if canImport(Dependencies)
         @Dependency(\.appStorageKeyFormatWarningEnabled) var appStorageKeyFormatWarningEnabled
+        #else
+        let appStorageKeyFormatWarningEnabled = appStorageKeyFormatWarningEnabled
+        #endif
         if appStorageKeyFormatWarningEnabled {
           let character = keyContainsPeriod ? "." : "@"
           reportIssue(
@@ -488,6 +505,7 @@
             """
           )
         }
+        #endif
         let previousValue = Mutex(context.initialValue)
         let userDefaultsDidChange = NotificationCenter.default.addObserver(
           forName: UserDefaults.didChangeNotification,
@@ -565,6 +583,7 @@
     fileprivate let store: UserDefaults
   }
 
+#if canImport(Dependencies)
   extension DependencyValues {
     /// Default file storage used by ``SharedReaderKey/appStorage(_:)``.
     ///
@@ -616,6 +635,8 @@
     }
   }
 
+#endif
+
   extension UserDefaults {
     public static var inMemory: UserDefaults {
       let suiteName: String
@@ -631,10 +652,12 @@
     }
   }
 
+#if canImport(Dependencies)
   private enum AppStorageKeyFormatWarningEnabledKey: DependencyKey {
     static let liveValue = true
     static let testValue = true
   }
+#endif
 
   // NB: This is mainly used for tests, where observer notifications can bleed across cases.
   private enum SharedAppStorageLocals {

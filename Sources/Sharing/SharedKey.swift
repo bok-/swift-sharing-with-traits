@@ -1,4 +1,6 @@
+#if canImport(Dependencies)
 import Dependencies
+#endif
 
 /// A type that can persist shared state to an external storage.
 ///
@@ -36,6 +38,9 @@ public enum SaveContext: Hashable, Sendable {
   case userInitiated
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension Shared {
   /// Creates a shared reference to a value using a shared key.
   ///
@@ -87,7 +92,11 @@ extension Shared {
   /// - Parameter key: A shared key associated with the shared reference. It is responsible for
   ///   loading and saving the shared reference's value from some external source.
   public func load(_ key: some SharedKey<Value>) async throws {
+    #if canImport(Dependencies)
     @Dependency(PersistentReferences.self) var persistentReferences
+    #else
+    let persistentReferences = PersistentReferences.testValue
+    #endif
     SharedPublisherLocals.$isLoading.withValue(true) {
       projectedValue = Shared(
         reference: persistentReferences.value(
@@ -134,7 +143,11 @@ extension Shared {
     rethrowing value: @autoclosure () throws -> Value, _ key: some SharedKey<Value>,
     skipInitialLoad: Bool
   ) rethrows {
-    @Dependency(PersistentReferences.self) var persistentReferences
+#if canImport(Dependencies)
+@Dependency(PersistentReferences.self) var persistentReferences
+#else
+let persistentReferences = PersistentReferences.testValue
+#endif
     self.init(
       reference: try persistentReferences.value(
         forKey: key,

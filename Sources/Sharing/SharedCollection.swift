@@ -1,5 +1,5 @@
+#if canImport(IdentifiedCollections)
 import IdentifiedCollections
-import IssueReporting
 
 extension RangeReplaceableCollection {
   /// Creates an collection of shared elements from a shared collection.
@@ -51,3 +51,5 @@ extension RangeReplaceableCollection {
     }
   }
 }
+
+#endif

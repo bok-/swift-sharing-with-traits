@@ -1,4 +1,6 @@
+#if canImport(Dependencies)
 import Dependencies
+#endif
 import Foundation
 
 extension SharedReaderKey {
@@ -33,7 +35,11 @@ public struct InMemoryKey<Value: Sendable>: SharedKey {
   private let key: String
   private let store: InMemoryStorage
   fileprivate init(_ key: String) {
+    #if canImport(Dependencies)
     @Dependency(\.defaultInMemoryStorage) var defaultInMemoryStorage
+    #else
+    let defaultInMemoryStorage = InMemoryStorage.defaultStorage
+    #endif
     self.key = key
     self.store = defaultInMemoryStorage
   }
@@ -71,6 +77,10 @@ extension InMemoryKey: CustomStringConvertible {
 }
 
 public struct InMemoryStorage: Hashable, Sendable {
+  #if !canImport(Dependencies)
+  @TaskLocal public static var defaultStorage = InMemoryStorage()
+  #endif
+
   private let id = UUID()
   fileprivate let values = Values()
   public init() {}
@@ -107,6 +117,7 @@ public struct InMemoryKeyID: Hashable {
   let store: InMemoryStorage
 }
 
+#if canImport(Dependencies)
 private enum DefaultInMemoryStorageKey: DependencyKey {
   static var liveValue: InMemoryStorage { InMemoryStorage() }
   static var testValue: InMemoryStorage { InMemoryStorage() }
@@ -118,3 +129,4 @@ extension DependencyValues {
     set { self[DefaultInMemoryStorageKey.self] = newValue }
   }
 }
+#endif

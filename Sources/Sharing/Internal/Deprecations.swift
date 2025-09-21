@@ -16,6 +16,9 @@
 
 // NB: Deprecated after 2.2.0
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension SharedReader {
   #if compiler(>=6)
     @available(*, deprecated, message: "Use 'SharedReader(value:)', instead.")

@@ -37,6 +37,9 @@
     ///  }
     /// ```
     @propertyWrapper
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
     public struct Shared: DynamicProperty {
       @SwiftUI.State private var shared: Sharing.Shared<Value>
 
@@ -144,6 +147,9 @@
     ///  }
     /// ```
     @propertyWrapper
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
     public struct SharedReader: DynamicProperty {
       @SwiftUI.State private var shared: Sharing.SharedReader<Value>
 
@@ -258,8 +264,14 @@
   }
 
   #if compiler(>=6)
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
     extension State.Shared: Sendable where Value: Sendable {}
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
     extension State.SharedReader: Sendable where Value: Sendable {}
   #endif
 #endif

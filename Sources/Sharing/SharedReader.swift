@@ -1,8 +1,16 @@
+#if canImport(CustomDump)
 import CustomDump
+#endif
 import Foundation
+#if canImport(IdentifiedCollections)
 import IdentifiedCollections
+#endif
+#if canImport(IssueReporting)
 import IssueReporting
+#endif
+#if canImport(PerceptionCore)
 import PerceptionCore
+#endif
 
 #if canImport(Combine)
   import Combine
@@ -14,6 +22,9 @@ import PerceptionCore
 /// A property wrapper type that shares a read-only value with multiple parts of an application.
 @dynamicMemberLookup
 @propertyWrapper
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 public struct SharedReader<Value> {
   let box: Box
   #if canImport(SwiftUI)
@@ -301,21 +312,30 @@ public struct SharedReader<Value> {
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension SharedReader: CustomReflectable {
   public var customMirror: Mirror {
     Mirror(reflecting: wrappedValue)
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension SharedReader: CustomStringConvertible {
   public var description: String {
     "\(typeName(Self.self, genericsAbbreviated: false))(\(reference.description))"
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension SharedReader: Equatable where Value: Equatable {
   public static func == (lhs: Self, rhs: Self) -> Bool {
-    #if DEBUG
+    #if DEBUG && canImport(PerceptionCore)
       _PerceptionLocals.$skipPerceptionChecking.withValue(true) {
         lhs.wrappedValue == rhs.wrappedValue
       }
@@ -325,9 +345,12 @@ extension SharedReader: Equatable where Value: Equatable {
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension SharedReader: Identifiable where Value: Identifiable {
   public var id: Value.ID {
-    #if DEBUG
+    #if DEBUG && canImport(PerceptionCore)
       _PerceptionLocals.$skipPerceptionChecking.withValue(true) { wrappedValue.id }
     #else
       wrappedValue.id
@@ -335,23 +358,45 @@ extension SharedReader: Identifiable where Value: Identifiable {
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension SharedReader: Observable {}
 
 #if compiler(>=6)
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
   extension SharedReader: Sendable {}
 #else
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
   extension SharedReader: @unchecked Sendable {}
 #endif
 
+#if canImport(PerceptionCore)
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension SharedReader: Perceptible {}
+#endif
 
+#if canImport(CustomDump)
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension SharedReader: CustomDumpRepresentable {
   public var customDumpValue: Any {
     wrappedValue
   }
 }
+#endif
 
 #if canImport(SwiftUI)
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
   extension SharedReader: DynamicProperty {
     public func update() {
       box.subscribe(state: _generation)

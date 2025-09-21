@@ -1,12 +1,22 @@
+#if canImport(Dependencies)
 import Dependencies
+#endif
 import Foundation
+#if canImport(IdentifiedCollections)
 import IdentifiedCollections
+#endif
+#if canImport(IssueReporting)
+import IssueReporting
+#endif
+#if canImport(PerceptionCore)
 import PerceptionCore
+#endif
 
 #if canImport(Combine)
   import Combine
 #endif
 
+#if canImport(PerceptionCore)
 protocol Reference<Value>:
   AnyObject,
   CustomStringConvertible,
@@ -25,7 +35,31 @@ protocol Reference<Value>:
     var publisher: any Publisher<Value, Never> { get }
   #endif
 }
+#else
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+protocol Reference<Value>:
+  AnyObject,
+  CustomStringConvertible,
+  Sendable,
+  Observable
+{
+  associatedtype Value
 
+  var id: ObjectIdentifier { get }
+  var isLoading: Bool { get }
+  var loadError: (any Error)? { get }
+  var wrappedValue: Value { get }
+  func load() async throws
+  func touch()
+  #if canImport(Combine)
+    var publisher: any Publisher<Value, Never> { get }
+  #endif
+}
+#endif
+
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 protocol MutableReference<Value>: Reference, Equatable {
   var saveError: (any Error)? { get }
   var snapshot: Value? { get }
@@ -40,14 +74,26 @@ protocol MutableReference<Value>: Reference, Equatable {
   func save() async throws
 }
 
-final class _BoxReference<Value>: MutableReference, Observable, Perceptible, @unchecked Sendable {
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
+final class _BoxReference<Value>: MutableReference, Observable, @unchecked Sendable {
+
+  #if canImport(PerceptionCore)
   private let _$perceptionRegistrar = PerceptionRegistrar(isPerceptionCheckingEnabled: false)
+  #else
+  private let _$observationRegistrar = ObservationRegistrar()
+  #endif
   private let lock = NSRecursiveLock()
 
   #if canImport(Combine)
     private var value: Value {
       willSet {
+        #if canImport(Dependencies)
         @Dependency(\.snapshots) var snapshots
+        #else
+        let snapshots = Snapshots()
+        #endif
         if !snapshots.isAsserting {
           subject.send(newValue)
         }
@@ -86,7 +132,11 @@ final class _BoxReference<Value>: MutableReference, Observable, Perceptible, @un
   }
 
   var snapshot: Value? {
+    #if canImport(Dependencies)
     @Dependency(\.snapshots) var snapshots
+    #else
+    let snapshots = Snapshots()
+    #endif
     return snapshots[self]
   }
 
@@ -97,7 +147,11 @@ final class _BoxReference<Value>: MutableReference, Observable, Perceptible, @un
     line: UInt,
     column: UInt
   ) {
+    #if canImport(Dependencies)
     @Dependency(\.snapshots) var snapshots
+    #else
+    let snapshots = Snapshots()
+    #endif
     snapshots.save(
       key: self,
       value: value,
@@ -133,6 +187,7 @@ final class _BoxReference<Value>: MutableReference, Observable, Perceptible, @un
     line: UInt = #line,
     column: UInt = #column
   ) {
+    #if canImport(PerceptionCore)
     _$perceptionRegistrar.access(
       self,
       keyPath: keyPath,
@@ -141,12 +196,16 @@ final class _BoxReference<Value>: MutableReference, Observable, Perceptible, @un
       line: line,
       column: column
     )
+    #else
+      _$observationRegistrar.access(self, keyPath: keyPath)
+    #endif
   }
 
   func withMutation<Member, MutationResult>(
     keyPath: _SendableKeyPath<_BoxReference, Member>,
     _ mutation: () throws -> MutationResult
   ) rethrows -> MutationResult {
+    #if canImport(PerceptionCore)
     #if os(WASI)
       return try _$perceptionRegistrar.withMutation(of: self, keyPath: keyPath, mutation)
     #else
@@ -159,24 +218,52 @@ final class _BoxReference<Value>: MutableReference, Observable, Perceptible, @un
         return try mutation()
       }
     #endif
+    #else
+#if os(WASI)
+      return try _$observationRegistrar.withMutation(of: self, keyPath: keyPath, mutation)
+#else
+      if Thread.isMainThread {
+        return try _$observationRegistrar.withMutation(of: self, keyPath: keyPath, mutation)
+      } else {
+        DispatchQueue.main.async {
+          self._$observationRegistrar.withMutation(of: self, keyPath: keyPath) {}
+        }
+      }
+#endif
+    return try mutation()
+    #endif
   }
 
   var description: String {
     "value: \(String(reflecting: wrappedValue))"
   }
 }
+#if canImport(PerceptionCore)
+extension _BoxReference: Perceptible {}
+#endif
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 final class _PersistentReference<Key: SharedReaderKey>:
-  Reference, Observable, Perceptible, @unchecked Sendable
+  Reference, Observable, @unchecked Sendable
 {
+  #if canImport(PerceptionCore)
   private let _$perceptionRegistrar = PerceptionRegistrar(isPerceptionCheckingEnabled: false)
+  #else
+  private let _$observationRegistrar = ObservationRegistrar()
+  #endif
   private let key: Key
   private let lock = NSRecursiveLock()
 
   #if canImport(Combine)
     private var value: Key.Value {
       willSet {
+        #if canImport(Dependencies)
         @Dependency(\.snapshots) var snapshots
+        #else
+        let snapshots = Snapshots()
+        #endif
         if !snapshots.isAsserting {
           subject.send(newValue)
         }
@@ -258,7 +345,7 @@ final class _PersistentReference<Key: SharedReaderKey>:
       withMutation(keyPath: \._loadError) {
         lock.withLock { _loadError = newValue }
       }
-      #if DEBUG
+      #if DEBUG && canImport(IssueReporting)
         if !isTesting, let newValue {
           reportIssue(newValue)
         }
@@ -317,6 +404,7 @@ final class _PersistentReference<Key: SharedReaderKey>:
     line: UInt = #line,
     column: UInt = #column
   ) {
+#if canImport(PerceptionCore)
     _$perceptionRegistrar.access(
       self,
       keyPath: keyPath,
@@ -325,31 +413,55 @@ final class _PersistentReference<Key: SharedReaderKey>:
       line: line,
       column: column
     )
+#else
+    _$observationRegistrar.access(self, keyPath: keyPath)
+#endif
   }
 
   func withMutation<Member, MutationResult>(
     keyPath: _SendableKeyPath<_PersistentReference, Member>,
     _ mutation: () throws -> MutationResult
   ) rethrows -> MutationResult {
-    #if os(WASI)
+#if canImport(PerceptionCore)
+#if os(WASI)
+    return try _$perceptionRegistrar.withMutation(of: self, keyPath: keyPath, mutation)
+#else
+    if Thread.isMainThread {
       return try _$perceptionRegistrar.withMutation(of: self, keyPath: keyPath, mutation)
-    #else
-      if Thread.isMainThread {
-        return try _$perceptionRegistrar.withMutation(of: self, keyPath: keyPath, mutation)
-      } else {
-        DispatchQueue.main.async {
-          self._$perceptionRegistrar.withMutation(of: self, keyPath: keyPath) {}
-        }
-        return try mutation()
+    } else {
+      DispatchQueue.main.async {
+        self._$perceptionRegistrar.withMutation(of: self, keyPath: keyPath) {}
       }
-    #endif
+      return try mutation()
+    }
+#endif
+#else
+#if os(WASI)
+    return try _$observationRegistrar.withMutation(of: self, keyPath: keyPath, mutation)
+#else
+    if Thread.isMainThread {
+      return try _$observationRegistrar.withMutation(of: self, keyPath: keyPath, mutation)
+    } else {
+      DispatchQueue.main.async {
+        self._$observationRegistrar.withMutation(of: self, keyPath: keyPath) {}
+      }
+    }
+#endif
+    return try mutation()
+#endif
   }
 
   var description: String {
     String(reflecting: key)
   }
 }
+#if canImport(PerceptionCore)
+extension _PersistentReference: Perceptible {}
+#endif
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension _PersistentReference: MutableReference, Equatable where Key: SharedKey {
   var saveError: (any Error)? {
     get {
@@ -360,7 +472,7 @@ extension _PersistentReference: MutableReference, Equatable where Key: SharedKey
       withMutation(keyPath: \._saveError) {
         lock.withLock { _saveError = newValue }
       }
-      #if DEBUG
+      #if DEBUG && canImport(IssueReporting)
         if !isTesting, let newValue {
           reportIssue(newValue)
         }
@@ -369,7 +481,11 @@ extension _PersistentReference: MutableReference, Equatable where Key: SharedKey
   }
 
   var snapshot: Key.Value? {
+    #if canImport(Dependencies)
     @Dependency(\.snapshots) var snapshots
+    #else
+    let snapshots = Snapshots()
+    #endif
     return snapshots[self]
   }
 
@@ -380,7 +496,11 @@ extension _PersistentReference: MutableReference, Equatable where Key: SharedKey
     line: UInt,
     column: UInt
   ) {
-    @Dependency(\.snapshots) var snapshots
+#if canImport(Dependencies)
+@Dependency(\.snapshots) var snapshots
+#else
+let snapshots = Snapshots()
+#endif
     snapshots.save(
       key: self,
       value: value,
@@ -441,6 +561,9 @@ extension _PersistentReference: MutableReference, Equatable where Key: SharedKey
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 final class _AppendKeyPathReference<
   Base: Reference, Value, Path: KeyPath<Base.Value, Value> & Sendable
 >: Reference, Observable {
@@ -490,6 +613,9 @@ final class _AppendKeyPathReference<
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension _AppendKeyPathReference: MutableReference, Equatable
 where Base: MutableReference, Path: WritableKeyPath<Base.Value, Value> {
   var saveError: (any Error)? {
@@ -525,6 +651,9 @@ where Base: MutableReference, Path: WritableKeyPath<Base.Value, Value> {
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 final class _ReadClosureReference<Base: Reference, Value>:
   Reference,
   Observable
@@ -575,6 +704,9 @@ final class _ReadClosureReference<Base: Reference, Value>:
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 final class _OptionalReference<Base: Reference<Value?>, Value>:
   Reference,
   Observable,
@@ -629,6 +761,9 @@ final class _OptionalReference<Base: Reference<Value?>, Value>:
   }
 }
 
+#if !canImport(PerceptionCore)
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+#endif
 extension _OptionalReference: MutableReference, Equatable where Base: MutableReference {
   var saveError: (any Error)? {
     base.saveError
